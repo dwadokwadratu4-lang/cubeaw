@@ -4,7 +4,6 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Test AR - Wyłanianie 3D | Artur Wierzbicki</title>
-    <!-- Stabilne wersje bibliotek A-Frame oraz AR.js z jsDelivr -->
     <script src="https://aframe.io"></script>
     <script src="https://jsdelivr.net"></script>
     <style>
@@ -17,7 +16,6 @@
         background-color: transparent !important;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       }
-      /* Wymuszenie pełnego ekranu dla wideo z kamery */
       video {
         position: fixed !important;
         top: 0 !important;
@@ -33,7 +31,41 @@
         left: 0 !important;
         z-index: -1 !important;
       }
-      /* Górny pasek podpisu */
+      /* Ekran startowy wymuszający pytanie o zgodę na kamerę */
+      .start-overlay {
+        position: fixed;
+        inset: 0;
+        background: #1b4332;
+        color: #f4f1ea;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        text-align: center;
+        z-index: 999;
+      }
+      .start-btn {
+        background: #f4a261;
+        color: #1b4332;
+        border: none;
+        padding: 16px 28px;
+        font-size: 16px;
+        font-weight: 800;
+        border-radius: 14px;
+        margin-top: 20px;
+        cursor: pointer;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+      }
+      .error-box {
+        margin-top: 16px;
+        background: rgba(211, 47, 47, 0.9);
+        padding: 12px;
+        border-radius: 10px;
+        font-size: 13px;
+        display: none;
+        max-width: 320px;
+      }
       .header-badge {
         position: fixed;
         top: 12px;
@@ -47,23 +79,6 @@
         z-index: 100;
         white-space: nowrap;
       }
-      /* Komunikat statusu kamery (gdyby była zablokowana) */
-      .status-msg {
-        position: fixed;
-        top: 48px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: rgba(211, 47, 47, 0.9);
-        color: #ffffff;
-        padding: 6px 12px;
-        border-radius: 12px;
-        font-size: 11px;
-        z-index: 100;
-        text-align: center;
-        max-width: 85%;
-        display: none;
-      }
-      /* Dolny panel z suwakiem pod kciuk */
       .controls {
         position: fixed;
         bottom: 24px;
@@ -96,9 +111,7 @@
       AFRAME.registerComponent('cloak', {
         init: function () {
           const mesh = this.el.getObject3D('mesh');
-          if (mesh) {
-            mesh.material.colorWrite = false;
-          }
+          if (mesh) mesh.material.colorWrite = false;
         }
       });
 
@@ -106,14 +119,7 @@
         init: function () {
           const mesh = this.el.getObject3D('mesh');
           if (mesh) {
-            const colors = [
-              0xe63946, // Prawa - Czerwony
-              0x2a9d8f, // Lewa - Turkusowy
-              0xf4a261, // Góra - Pomarańczowy
-              0x264653, // Dół - Ciemny granat
-              0x457b9d, // Przód - Niebieski
-              0xe9c46a  // Tył - Żółty
-            ];
+            const colors = [0xe63946, 0x2a9d8f, 0xf4a261, 0x264653, 0x457b9d, 0xe9c46a];
             mesh.material = colors.map(c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.4 }));
           }
         }
@@ -121,67 +127,80 @@
     </script>
   </head>
   <body>
-    <div class="header-badge">WebAR Test | Artur Wierzbicki</div>
-    <div id="statusMsg" class="status-msg"></div>
+    <!-- Ekran startowy -->
+    <div id="startOverlay" class="start-overlay">
+      <div style="font-size: 13px; opacity: 0.8;">Projekt i realizacja: Artur Wierzbicki</div>
+      <h2 style="margin: 8px 0;">Test WebAR 3D</h2>
+      <p style="font-size: 14px; max-width: 300px; line-height: 1.4;">
+        Kliknij przycisk poniżej, aby włączyć tylną kamerę i skieruj ją na znacznik <b>HIRO</b>.
+      </p>
+      <button id="startBtn" class="start-btn">URUCHOM KAMERĘ AR</button>
+      <div id="errorBox" class="error-box"></div>
+    </div>
 
-    <!-- Interfejs suwaka na dole ekranu -->
+    <div class="header-badge">WebAR Test | Artur Wierzbicki</div>
+
     <div class="controls">
       <label for="emergeSlider">Wysunięcie obiektu: <span id="percentText">50</span>%</label>
       <input type="range" id="emergeSlider" min="0" max="100" value="50" />
     </div>
 
-    <!-- Scena AR z wymuszeniem tylnej kamery -->
-    <a-scene
-      embedded
-      vr-mode-ui="enabled: false"
-      arjs="sourceType: webcam; facingMode: environment; debugUIEnabled: false;"
-      renderer="antialias: true; alpha: true;"
-    >
-      <a-light type="ambient" color="#ffffff" intensity="0.8"></a-light>
-      <a-light type="directional" position="1 3 2" intensity="0.9"></a-light>
-
-      <a-marker preset="hiro">
-        <a-plane position="0 0 -2.5" rotation="-90 0 0" width="10" height="4" cloak></a-plane>
-        <a-plane position="0 0 2.5" rotation="-90 0 0" width="10" height="4" cloak></a-plane>
-        <a-plane position="-2.5 0 0" rotation="-90 0 0" width="4" height="1" cloak></a-plane>
-        <a-plane position="2.5 0 0" rotation="-90 0 0" width="4" height="1" cloak></a-plane>
-
-        <a-box id="arCube" position="0 0 0" width="1" height="1" depth="1" multi-color-box></a-box>
-      </a-marker>
-
-      
-    </a-scene>
+    <div id="arContainer"></div>
 
     <script>
+      const startBtn = document.getElementById('startBtn');
+      const startOverlay = document.getElementById('startOverlay');
+      const errorBox = document.getElementById('errorBox');
       const slider = document.getElementById('emergeSlider');
       const percentText = document.getElementById('percentText');
-      const cube = document.getElementById('arCube');
-      const statusMsg = document.getElementById('statusMsg');
+      const arContainer = document.getElementById('arContainer');
 
       function updateCubePosition(val) {
         percentText.textContent = val;
-        const yPos = -0.501 + (val / 100) * 1.001;
-        cube.setAttribute('position', `0 ${yPos.toFixed(3)} 0`);
+        const cube = document.getElementById('arCube');
+        if (cube) {
+          const yPos = -0.501 + (val / 100) * 1.001;
+          cube.setAttribute('position', `0 ${yPos.toFixed(3)} 0`);
+        }
       }
-
-      updateCubePosition(50);
 
       slider.addEventListener('input', (e) => {
         updateCubePosition(e.target.value);
       });
 
-      // Sprawdzenie uprawnień kamery w przeglądarce
-      window.addEventListener('arjs-video-loaded', () => {
-        statusMsg.style.display = 'none';
-      });
+      // Wymuszenie zapytania o kamerę po kliknięciu przycisku
+      startBtn.addEventListener('click', async () => {
+        errorBox.style.display = 'none';
+        try {
+          // Najpierw wymuszamy systemowe okno z pytaniem o dostęp do tylnej kamery
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'environment' }
+          });
+          // Zatrzymujemy strumień testowy, aby AR.js mógł go przejąć
+          stream.getTracks().forEach(track => track.stop());
 
-      setTimeout(() => {
-        const video = document.querySelector('video');
-        if (!video || video.readyState === 0) {
-          statusMsg.style.display = 'block';
-          statusMsg.textContent = 'Brak obrazu z kamery. Kliknij ikonę ustawień obok adresu strony u góry i zezwól na dostęp do aparatu, a następnie odśwież.';
+          // Wstrzykujemy scenę AR dopiero po uzyskaniu zgody
+          arContainer.innerHTML = `
+            <a-scene embedded vr-mode-ui="enabled: false" arjs="sourceType: webcam; facingMode: environment; debugUIEnabled: false;" renderer="antialias: true; alpha: true;">
+              <a-light type="ambient" color="#ffffff" intensity="0.8"></a-light>
+              <a-light type="directional" position="1 3 2" intensity="0.9"></a-light>
+              <a-marker preset="hiro">
+                <a-plane position="0 0 -2.5" rotation="-90 0 0" width="10" height="4" cloak></a-plane>
+                <a-plane position="0 0 2.5" rotation="-90 0 0" width="10" height="4" cloak></a-plane>
+                <a-plane position="-2.5 0 0" rotation="-90 0 0" width="4" height="1" cloak></a-plane>
+                <a-plane position="2.5 0 0" rotation="-90 0 0" width="4" height="1" cloak></a-plane>
+                <a-box id="arCube" position="0 0 0" width="1" height="1" depth="1" multi-color-box></a-box>
+              </a-marker>
+              
+            </a-scene>
+          `;
+          startOverlay.style.display = 'none';
+          setTimeout(() => updateCubePosition(slider.value), 500);
+        } catch (err) {
+          errorBox.style.display = 'block';
+          errorBox.innerHTML = `<b>Odmowa dostępu (${err.name}):</b><br>1. Otwórz link bezpośrednio w aplikacji <b>Google Chrome</b>.<br>2. Kliknij ikonę suwaków po lewej stronie paska adresu u góry -> <b>Uprawnienia</b> -> włącz <b>Aparat</b>.`;
         }
-      }, 4000);
+      });
     </script>
   </body>
 </html>
