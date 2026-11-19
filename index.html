@@ -2,16 +2,36 @@
 <html lang="pl">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Test AR - Wyłanianie 3D | Artur Wierzbicki</title>
-    <!-- Biblioteka A-Frame oraz AR.js -->
+    <!-- Stabilne wersje bibliotek A-Frame oraz AR.js z jsDelivr -->
     <script src="https://aframe.io"></script>
-    <script src="https://githack.com"></script>
+    <script src="https://jsdelivr.net"></script>
     <style>
-      body {
+      html, body {
         margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
         overflow: hidden;
+        background-color: transparent !important;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+      /* Wymuszenie pełnego ekranu dla wideo z kamery */
+      video {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        object-fit: cover !important;
+        z-index: -2 !important;
+      }
+      canvas.a-canvas {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        z-index: -1 !important;
       }
       /* Górny pasek podpisu */
       .header-badge {
@@ -19,14 +39,29 @@
         top: 12px;
         left: 50%;
         transform: translateX(-50%);
-        background: rgba(20, 30, 25, 0.8);
+        background: rgba(20, 30, 25, 0.85);
         color: #f4f1ea;
         padding: 6px 14px;
         border-radius: 20px;
         font-size: 12px;
         z-index: 100;
         white-space: nowrap;
-        backdrop-filter: blur(4px);
+      }
+      /* Komunikat statusu kamery (gdyby była zablokowana) */
+      .status-msg {
+        position: fixed;
+        top: 48px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(211, 47, 47, 0.9);
+        color: #ffffff;
+        padding: 6px 12px;
+        border-radius: 12px;
+        font-size: 11px;
+        z-index: 100;
+        text-align: center;
+        max-width: 85%;
+        display: none;
       }
       /* Dolny panel z suwakiem pod kciuk */
       .controls {
@@ -58,7 +93,6 @@
       }
     </style>
     <script>
-      // Komponent A-Frame tworzący niewidzialną maskę (ukrywa to, co jest pod płaszczyzną znacznika)
       AFRAME.registerComponent('cloak', {
         init: function () {
           const mesh = this.el.getObject3D('mesh');
@@ -68,7 +102,6 @@
         }
       });
 
-      // Komponent nadający każdej z 6 ścian sześcianu inny kolor
       AFRAME.registerComponent('multi-color-box', {
         init: function () {
           const mesh = this.el.getObject3D('mesh');
@@ -89,6 +122,7 @@
   </head>
   <body>
     <div class="header-badge">WebAR Test | Artur Wierzbicki</div>
+    <div id="statusMsg" class="status-msg"></div>
 
     <!-- Interfejs suwaka na dole ekranu -->
     <div class="controls">
@@ -96,19 +130,22 @@
       <input type="range" id="emergeSlider" min="0" max="100" value="50" />
     </div>
 
-    <!-- Scena AR -->
-    <a-scene embedded arjs="trackingMethod: best; sourceType: webcam; debugUIEnabled: false;" renderer="antialias: true;">
-      <a-light type="ambient" color="#ffffff" intensity="0.7"></a-light>
-      <a-light type="directional" position="1 3 2" intensity="0.8"></a-light>
+    <!-- Scena AR z wymuszeniem tylnej kamery -->
+    <a-scene
+      embedded
+      vr-mode-ui="enabled: false"
+      arjs="sourceType: webcam; facingMode: environment; debugUIEnabled: false;"
+      renderer="antialias: true; alpha: true;"
+    >
+      <a-light type="ambient" color="#ffffff" intensity="0.8"></a-light>
+      <a-light type="directional" position="1 3 2" intensity="0.9"></a-light>
 
       <a-marker preset="hiro">
-        <!-- Niewidzialna podłoga z wyciętym otworem (maskuje część sześcianu pod znacznikiem) -->
         <a-plane position="0 0 -2.5" rotation="-90 0 0" width="10" height="4" cloak></a-plane>
         <a-plane position="0 0 2.5" rotation="-90 0 0" width="10" height="4" cloak></a-plane>
         <a-plane position="-2.5 0 0" rotation="-90 0 0" width="4" height="1" cloak></a-plane>
         <a-plane position="2.5 0 0" rotation="-90 0 0" width="4" height="1" cloak></a-plane>
 
-        <!-- Wielokolorowy sześcian 3D (bok 1x1x1) -->
         <a-box id="arCube" position="0 0 0" width="1" height="1" depth="1" multi-color-box></a-box>
       </a-marker>
 
@@ -119,22 +156,32 @@
       const slider = document.getElementById('emergeSlider');
       const percentText = document.getElementById('percentText');
       const cube = document.getElementById('arCube');
+      const statusMsg = document.getElementById('statusMsg');
 
       function updateCubePosition(val) {
         percentText.textContent = val;
-        // Dla 0%: środek sześcianu jest na -0.501 (cały schowany pod płaszczyzną)
-        // Dla 100%: środek sześcianu jest na +0.5 (cały stoi na płaszczyźnie znacznika)
         const yPos = -0.501 + (val / 100) * 1.001;
         cube.setAttribute('position', `0 ${yPos.toFixed(3)} 0`);
       }
 
-      // Ustawienie pozycji początkowej (50%)
       updateCubePosition(50);
 
-      // Reakcja na ruch suwaka
       slider.addEventListener('input', (e) => {
         updateCubePosition(e.target.value);
       });
+
+      // Sprawdzenie uprawnień kamery w przeglądarce
+      window.addEventListener('arjs-video-loaded', () => {
+        statusMsg.style.display = 'none';
+      });
+
+      setTimeout(() => {
+        const video = document.querySelector('video');
+        if (!video || video.readyState === 0) {
+          statusMsg.style.display = 'block';
+          statusMsg.textContent = 'Brak obrazu z kamery. Kliknij ikonę ustawień obok adresu strony u góry i zezwól na dostęp do aparatu, a następnie odśwież.';
+        }
+      }, 4000);
     </script>
   </body>
 </html>
